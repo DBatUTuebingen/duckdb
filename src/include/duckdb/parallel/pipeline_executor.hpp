@@ -85,12 +85,12 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	void FetchFromSource(DataChunk &result);
+	bool FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	bool IsFinished();
 
-	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
+	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0, bool last_iter = false);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);

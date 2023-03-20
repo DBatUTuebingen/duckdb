@@ -1,6 +1,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
 namespace duckdb {
 
@@ -38,18 +39,19 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 bool PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	bool exhausted_source = false;
+	bool last_iter = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
 		if (IsFinished()) {
 			break;
 		}
 		source_chunk.Reset();
-		FetchFromSource(source_chunk);
+		last_iter = FetchFromSource(source_chunk);
 		if (source_chunk.size() == 0) {
 			exhausted_source = true;
 			break;
 		}
-		auto result = ExecutePushInternal(source_chunk);
+		auto result = ExecutePushInternal(source_chunk, 0, last_iter);
 		if (result == OperatorResultType::FINISHED) {
 			D_ASSERT(IsFinished());
 			break;
@@ -79,7 +81,7 @@ bool PipelineExecutor::IsFinished() {
 	return finished_processing_idx >= 0;
 }
 
-OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
+OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx, bool last_iter) {
 	D_ASSERT(pipeline.sink);
 	if (input.size() == 0) { // LCOV_EXCL_START
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -101,7 +103,19 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+			SinkResultType sink_result;
+			if (last_iter && pipeline.sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
+			    pipeline.source->type == PhysicalOperatorType::RECURSIVE_CTE) {
+				sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+				EndOperator(pipeline.sink, nullptr);
+				FinishProcessing();
+				return OperatorResultType::FINISHED;
+			} else if (pipeline.sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
+			           pipeline.source->type == PhysicalOperatorType::RECURSIVE_CTE) {
+				sink_result = SinkResultType::NEED_MORE_INPUT;
+			} else {
+				sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+			}
 			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {
 				FinishProcessing();
@@ -307,7 +321,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	return in_process_operators.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-void PipelineExecutor::FetchFromSource(DataChunk &result) {
+bool PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
 	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
 	if (result.size() != 0 && requires_batch_index) {
@@ -318,7 +332,15 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
 		local_sink_state->batch_index = next_batch_index;
 	}
+	if (result.size() == 0 && pipeline.source->GetName() == "REC_CTE") {
+		PhysicalRecursiveCTE *v = static_cast<PhysicalRecursiveCTE *>(pipeline.source);
+		v->GetWtContent(context, result, *pipeline.source_state, *local_source_state);
+		EndOperator(pipeline.source, &result);
+		// what happens with nested rec CTEs? Can I return true here?
+		return true;
+	}
 	EndOperator(pipeline.source, &result);
+	return false;
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {

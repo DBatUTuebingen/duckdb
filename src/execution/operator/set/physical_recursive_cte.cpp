@@ -118,6 +118,13 @@ void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, 
 	}
 }
 
+void PhysicalRecursiveCTE::GetWtContent(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                        LocalSourceState &lstate) const {
+	auto &gstate = (RecursiveCTEState &)*sink_state;
+	working_table->InitializeScan(gstate.scan_state);
+	working_table->Scan(gstate.scan_state, chunk);
+}
+
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {
 	if (!recursive_meta_pipeline) {
 		throw InternalException("Missing meta pipeline for recursive CTE");

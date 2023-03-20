@@ -29,6 +29,8 @@ public:
 	// Source interface
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+	void GetWtContent(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                  LocalSourceState &lstate) const;
 
 public:
 	// Sink interface
