@@ -1,7 +1,8 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
-#include "duckdb/main/client_context.hpp"
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -332,7 +333,7 @@ bool PipelineExecutor::FetchFromSource(DataChunk &result) {
 		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
 		local_sink_state->batch_index = next_batch_index;
 	}
-	if (result.size() == 0 && pipeline.source->GetName() == "REC_CTE") {
+	if (result.size() == 0 && pipeline.source->type == PhysicalOperatorType::RECURSIVE_CTE) {
 		PhysicalRecursiveCTE *v = static_cast<PhysicalRecursiveCTE *>(pipeline.source);
 		v->GetWtContent(context, result, *pipeline.source_state, *local_source_state);
 		EndOperator(pipeline.source, &result);
