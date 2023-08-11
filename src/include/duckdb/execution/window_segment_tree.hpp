@@ -13,6 +13,7 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,8 @@ public:
 
 class WindowAggregator {
 public:
-	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
+	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, WindowExclusion exclude_mode_p,
+	                 idx_t partition_count);
 	virtual ~WindowAggregator();
 
 	//	Build
@@ -48,8 +50,8 @@ public:
 
 	//	Probe
 	virtual unique_ptr<WindowAggregatorState> GetLocalState() const = 0;
-	virtual void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-	                      idx_t count) const = 0;
+	virtual void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	                      idx_t row_idx) const = 0;
 
 protected:
 	AggregateObject aggr;
@@ -69,12 +71,15 @@ protected:
 	idx_t filter_pos;
 	//! The state used by the aggregator to build.
 	unique_ptr<WindowAggregatorState> gstate;
+
+	//! The window exclusion clause
+	WindowExclusion exclude_mode;
 };
 
 class WindowConstantAggregator : public WindowAggregator {
 public:
 	WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type_p, const ValidityMask &partition_mask,
-	                         const idx_t count);
+	                         WindowExclusion exclude_mode_p, const idx_t count);
 	~WindowConstantAggregator() override {
 	}
 
@@ -82,8 +87,8 @@ public:
 	void Finalize() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
-	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-	              idx_t count) const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
 
 private:
 	void AggregateInit();
@@ -107,24 +112,31 @@ private:
 
 class WindowCustomAggregator : public WindowAggregator {
 public:
-	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
+	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p, WindowExclusion exclude_mode_p,
+	                       idx_t partition_count);
 	~WindowCustomAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
-	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-	              idx_t count) const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
 };
 
 class WindowSegmentTree : public WindowAggregator {
+
 public:
-	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count, WindowAggregationMode mode_p);
+	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
+
+	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
+	                  WindowExclusion exclude_mode_p, idx_t count);
 	~WindowSegmentTree() override;
 
 	void Finalize() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
-	void Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-	              idx_t count) const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
+	void EvaluateInternal(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
+	                      idx_t count, idx_t row_idx, FramePart frame_part) const;
 
 public:
 	void ConstructTree();

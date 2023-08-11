@@ -318,6 +318,7 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteOptionalProperty("default_expr", default_expr);
 	serializer.WriteProperty("ignore_nulls", ignore_nulls);
 	serializer.WriteOptionalProperty("filter_expr", filter_expr);
+	serializer.WriteProperty("exclude_clause", exclude_clause);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -336,6 +337,7 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(FormatDeseriali
 	deserializer.ReadOptionalProperty("default_expr", result->default_expr);
 	deserializer.ReadProperty("ignore_nulls", result->ignore_nulls);
 	deserializer.ReadOptionalProperty("filter_expr", result->filter_expr);
+	deserializer.ReadProperty("exclude_clause", result->exclude_clause);
 	return std::move(result);
 }
 

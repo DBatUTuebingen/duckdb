@@ -33,6 +33,9 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (start != other.start || end != other.end) {
 		return false;
 	}
+	if (exclude_clause != other.exclude_clause) {
+		return false;
+	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
@@ -99,6 +102,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
@@ -129,6 +133,7 @@ void BoundWindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(end_expr);
 	writer.WriteOptional(offset_expr);
 	writer.WriteOptional(default_expr);
+	writer.WriteField<WindowExclusion>(exclude_clause);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
@@ -159,6 +164,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->children = std::move(children);
+	result->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	return std::move(result);
 }
 
@@ -180,6 +186,7 @@ void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WriteOptionalProperty("end_expr", end_expr);
 	serializer.WriteOptionalProperty("offset_expr", offset_expr);
 	serializer.WriteOptionalProperty("default_expr", default_expr);
+	serializer.WriteProperty("exclude_clause", exclude_clause);
 }
 
 unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -206,6 +213,7 @@ unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializ
 	deserializer.ReadOptionalProperty("end_expr", result->end_expr);
 	deserializer.ReadOptionalProperty("offset_expr", result->offset_expr);
 	deserializer.ReadOptionalProperty("default_expr", result->default_expr);
+	deserializer.ReadProperty("exclude_clause", result->exclude_clause);
 	return std::move(result);
 }
 

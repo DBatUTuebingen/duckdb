@@ -77,6 +77,9 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	if (a.start != b.start || a.end != b.end) {
 		return false;
 	}
+	if (a.exclude_clause != b.exclude_clause) {
+		return false;
+	}
 	// check if the framing expressions are equivalentbind_
 	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
 	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
@@ -128,6 +131,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
@@ -152,7 +156,6 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	}
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
-
 	writer.WriteOptional(start_expr);
 	writer.WriteOptional(end_expr);
 	writer.WriteOptional(offset_expr);
@@ -160,6 +163,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
 	writer.WriteString(catalog);
+	writer.WriteField<WindowExclusion>(exclude_clause);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -176,7 +180,6 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	}
 	expr->start = reader.ReadRequired<WindowBoundary>();
 	expr->end = reader.ReadRequired<WindowBoundary>();
-
 	expr->start_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->end_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -184,6 +187,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
+	expr->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	return std::move(expr);
 }
 

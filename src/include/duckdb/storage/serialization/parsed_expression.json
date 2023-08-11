@@ -360,6 +360,10 @@
         "name": "filter_expr",
         "optional": true,
         "type": "ParsedExpression*"
+      },
+      {
+        "name": "exclude_clause",
+        "type": "WindowExclusion"
       }
     ],
     "constructor": ["type"]
